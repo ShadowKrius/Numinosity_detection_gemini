@@ -138,25 +138,18 @@ st.divider()
 with st.sidebar:
     st.markdown("### ⚙️ Settings")
     api_key = os.getenv("GEMINI_API_KEY", "")
-    serp_api_key = os.getenv("SERPAPI_KEY", "")
     model = st.selectbox(
         "Model",
         ["gemini-2.5-flash", "gemini-2.0-flash-001", "gemini-1.5-pro"],
         help="2.5-flash is most accurate. 2.0-flash-001 is faster and cheaper."
     )
     st.divider()
-    st.markdown("**🛍️ Product Search**")
-    search_country = st.selectbox("Shopping region", ["in", "us", "gb"], index=0,
-                                   help="in = India (Myntra, Ajio, Flipkart), us = US")
-    num_products = st.slider("Results per item", 2, 6, 4)
-    min_conf_search = st.slider("Min confidence to search", 0.5, 1.0, 0.75, 0.05,
-                                 help="Only search products for items above this confidence")
     st.divider()
     st.markdown("**💡 Tips**")
     st.markdown("- Works best on well-lit scenes\n- Min recommended clip: 5 seconds\n- Max file: 2 GB\n- Processing: ~30-90 seconds")
     st.divider()
     st.markdown("**Pricing estimate**")
-    st.markdown("~$0.07 per 45-min episode\n~$0.01 per item for SerpAPI")
+    st.markdown("~$0.10 per 45-min episode")
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 uploaded = st.file_uploader("Upload MP4 video", type=["mp4", "mov", "avi", "mkv"])
@@ -233,26 +226,6 @@ if uploaded and api_key:
             elapsed = time.time() - t0
             status.update(label=f"✅ Done in {elapsed:.1f}s — {len(items)} items found", state="complete")
 
-            # ── Product search ─────────────────────────────────────────────
-            product_results = {}
-            if serp_api_key and serp_api_key != "YOUR_SERPAPI_KEY":
-                search_status = st.status("🛍️ Finding products to buy...", expanded=True)
-                with search_status:
-                    from search import search_all_items
-                    st.write(f"Searching Google Shopping for {len(items)} items...")
-                    product_results = search_all_items(
-                        items,
-                        api_key=serp_api_key,
-                        num_results=num_products,
-                        country=search_country,
-                        min_confidence=min_conf_search,
-                    )
-                    found = sum(1 for v in product_results.values() if v and "error" not in v[0])
-                    search_status.update(
-                        label=f"✅ Found products for {found} items",
-                        state="complete"
-                    )
-
             # ── Stats ──────────────────────────────────────────────────────
             st.markdown("### Summary")
             sc1, sc2, sc3, sc4 = st.columns(4)
@@ -282,6 +255,23 @@ if uploaded and api_key:
                 filtered = [i for i in filtered if i.get("pattern") in filter_pattern]
             filtered = [i for i in filtered if i.get("confidence", 0) >= min_conf]
 
+            st.markdown("---")
+            import pandas as pd
+            summary_df = pd.DataFrame([{
+                "ID": i["item_id"],
+                "Type": i["item_type"].title(),
+                "Subtype": i["item_subtype"],
+                "Colors": ", ".join(i.get("colors", [])),
+                "Pattern": i.get("pattern", ""),
+                "Fit": i.get("fit", ""),
+                "Material": i.get("material_guess", ""),
+                "Style": ", ".join(i.get("style_tags", [])),
+                "Brand": i.get("brand_visible") or "—",
+                "Confidence": f"{i.get('confidence', 0):.0%}",
+            } for i in filtered])
+            st.dataframe(summary_df, use_container_width=True, hide_index=True)
+            st.markdown("---")
+
             # ── Item cards ─────────────────────────────────────────────────
             for item in filtered:
                 colors_html = "".join(
@@ -306,39 +296,6 @@ if uploaded and api_key:
   <div style="font-size:11px;color:#7a7aaa;margin-top:4px">Confidence: {conf:.0%}</div>
 </div>
 """, unsafe_allow_html=True)
-
-                # ── Product results for this item ──────────────────────────
-                products = product_results.get(item["item_id"], [])
-                if products and "error" not in products[0]:
-                    query_used = products[0].get("query_used", "")
-                    st.markdown(
-                        f'<div class="query-pill">🔍 searched: {query_used}</div>',
-                        unsafe_allow_html=True
-                    )
-                    cols = st.columns(len(products))
-                    for col, product in zip(cols, products):
-                        with col:
-                            img = product.get("image", "")
-                            title = product.get("title", "")
-                            price = product.get("price", "")
-                            retailer = product.get("retailer", "")
-                            link = product.get("link", "#")
-                            rating = product.get("rating")
-                            rating_str = f"⭐ {rating}" if rating else ""
-                            img_tag = f'<img src="{img}" style="width:100%;height:140px;object-fit:cover;border-radius:6px;">' if img else '<div style="width:100%;height:140px;background:#2d2d4a;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#7a7aaa;font-size:24px;">👗</div>'
-                            st.markdown(f"""
-<div class="product-card">
-  {img_tag}
-  <div class="product-title">{title}</div>
-  <div class="product-price">{price}</div>
-  <div class="product-retailer">{retailer} {rating_str}</div>
-  <a href="{link}" target="_blank" class="shop-btn">Shop Now</a>
-</div>
-""", unsafe_allow_html=True)
-                elif products and "error" in products[0]:
-                    st.caption(f"⚠️ Search failed: {products[0]['error']}")
-
-                st.markdown("<div style='margin-bottom:8px'></div>", unsafe_allow_html=True)
 
             # ── Raw JSON export ────────────────────────────────────────────
             st.markdown("### Export")
