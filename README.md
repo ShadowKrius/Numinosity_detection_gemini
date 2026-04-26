@@ -3,50 +3,47 @@
 Identify fashion items in video using Gemini's native video understanding.  
 No frame extraction. No CV pipeline. ~50 lines of core logic.
 
+---
+
 ## Setup
+
+### 1. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-You need a **Gemini API key** from [aistudio.google.com](https://aistudio.google.com).
+### 2. Set your API key
 
----
+Create a `.env` file in the project root:
 
-## Option A: Streamlit UI (recommended for demos)
+```
+GEMINI_API_KEY=your_key_here
+```
+
+Get your key from [aistudio.google.com](https://aistudio.google.com).
+
+### 3. Run the app
 
 ```bash
 streamlit run app.py
 ```
 
-Open `http://localhost:8501`, enter your API key, upload your MP4, click detect.
+Open `http://localhost:8501`, upload your MP4, and click **Detect Fashion Items**.
+
+> **Test clip:** A Saiyaara MP4 clip is included in the folder — use that to try it out immediately.
+
+> **Note:** You'll see a `search.py` file in the folder — ignore it for now, product search is still work in progress.
 
 ---
 
-## Option B: CLI script
-
-```bash
-python detect.py \
-  --video path/to/your/video.mp4 \
-  --api-key YOUR_GEMINI_API_KEY \
-  --output results.json
-```
-
-Optional flags:
-- `--model gemini-2.5-flash-preview-04-17` — use a more capable model
-- `--output results.json` — save JSON to file
-
----
-
-## Output schema
+## Output
 
 Each detected item returns:
 
 ```json
 {
   "item_id": 1,
-  "timestamp_first_seen": 12.5,
-  "timestamp_last_seen": 47.2,
   "person": "woman in foreground",
   "item_type": "dress",
   "item_subtype": "wrap midi dress",
@@ -61,26 +58,15 @@ Each detected item returns:
 }
 ```
 
+Results are shown as cards in the UI and can be downloaded as JSON.
+
 ---
 
-## Cost estimates
+## Cost
 
 | Model | Cost per 45-min episode |
 |---|---|
 | gemini-2.0-flash | ~$0.07 |
-| gemini-2.5-flash | ~$0.21 |
-| gemini-1.5-pro | ~$1.30 |
+| gemini-2.5-flash | ~$0.10 |
 
----
-
-## Next steps (Step 2 — product matching)
-
-Once you have the JSON output from Step 1, the next step is to:
-
-1. Take the `description` + `colors` + `item_type` from each detected item
-2. Query a product catalog using:
-   - **Google Shopping API** / **Serp API Google Shopping** for broad matching
-   - **Pinterest API** for visual inspiration
-   - **Marqo-FashionCLIP** for embedding-based similarity search against a product database
-3. Rank results by visual + attribute similarity
-4. Surface top 5-10 purchasable items per detected garment
+For short clips (under 3 minutes), cost is well under $0.01.
