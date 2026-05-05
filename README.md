@@ -1,72 +1,68 @@
-# Fashion Detector — MVP
+# Fashion Detector - MVP
 
-Identify fashion items in video using Gemini's native video understanding.  
-No frame extraction. No CV pipeline. ~50 lines of core logic.
+Identify fashion items in video using Gemini's native video understanding and generate Myntra search links.  
+No frame extraction. No CV pipeline.
+
+---
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `app.py` | Streamlit UI — upload video, view results, download JSON |
+| `detect.py` | Core detection logic + CLI runner |
+| `myntra_search.py` | Builds Myntra search URLs from detected items |
 
 ---
 
 ## Setup
 
-### 1. Install dependencies
-
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Set your API key
+Create a `.env` file with 'GEMINI_API_KEY=your_key_here'
 
-Create a `.env` file in the project root:
+Get your key at [aistudio.google.com](https://aistudio.google.com).
 
-```
-GEMINI_API_KEY=your_key_here
-```
+---
 
-Get your key from [aistudio.google.com](https://aistudio.google.com).
+## Run
 
-### 3. Run the app
-
+**Streamlit app**
 ```bash
 streamlit run app.py
 ```
+Open `http://localhost:8501`, upload an MP4, click **Detect Fashion Items**.
 
-Open `http://localhost:8501`, upload your MP4, and click **Detect Fashion Items**.
+**CLI**
+```bash
+python detect.py --video clip.mp4 --output results.json
+```
 
-> **Test clip:** A Saiyaara MP4 clip is included in the folder — use that to try it out immediately.
-
-> **Note:** You'll see a `search.py` file in the folder — ignore it for now, product search is still work in progress.
+> A Saiyaara MP4 test clip is included - use it to try immediately.
 
 ---
 
 ## Output
 
-Each detected item returns:
+Each detected item:
 
 ```json
 {
   "item_id": 1,
   "person": "woman in foreground",
-  "item_type": "dress",
-  "item_subtype": "wrap midi dress",
-  "colors": ["forest green", "cream"],
+  "item_type": "saree",
+  "item_subtype": "silk saree",
+  "colors": ["royal blue", "gold"],
   "pattern": "floral",
-  "material_guess": "chiffon",
-  "style_tags": ["feminine", "boho", "spring"],
+  "material_guess": "silk",
+  "style_tags": ["ethnic", "festive"],
   "fit": "flowy",
   "brand_visible": null,
-  "description": "A flowy forest green and cream floral wrap midi dress with a V-neckline and long sleeves.",
-  "confidence": 0.91
+  "description": "A royal blue silk saree with gold floral embroidery and a contrast gold border.",
+  "confidence": 0.91,
+  "myntra_url": "https://www.myntra.com/sarees?rawQuery=silk+saree+royal+blue+floral+silk+ethnic",
+  "search_query": "silk saree royal blue floral silk ethnic"
 }
 ```
-
-Results are shown as cards in the UI and can be downloaded as JSON.
-
----
-
-## Cost
-
-| Model | Cost per 45-min episode |
-|---|---|
-| gemini-2.0-flash | ~$0.07 |
-| gemini-2.5-flash | ~$0.10 |
-
-For short clips (under 3 minutes), cost is well under $0.01.
