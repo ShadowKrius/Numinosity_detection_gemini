@@ -1,14 +1,7 @@
-"""
-fashion_detector/detect.py
-Core fashion detection using Gemini native video input.
-Usage: python detect.py --video path/to/video.mp4 --api-key YOUR_KEY
-"""
-
 import argparse
 import json
 import time
 import pathlib
-import sys
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -18,47 +11,45 @@ load_dotenv()
 
 
 FASHION_PROMPT = """
-You are a fashion expert and visual analyst. Watch this video carefully and identify every distinct fashion item worn by people on screen.
+You are a fashion expert specialising in Indian and global fashion. Watch this video and identify every distinct fashion item worn by people on screen.
 
-For each unique fashion item you detect, return a JSON object with these fields:
+For each unique item return a JSON object with these fields:
 - "item_id": sequential integer starting at 1
-- "person": single string describing the person wearing it (e.g. "woman in foreground", "man on left")
-- "item_type": single string garment category (e.g. "dress", "blazer", "jeans", "sneakers", "handbag", "necklace", "watch")
-- "item_subtype": single string, more specific type (e.g. "midi dress", "oversized blazer", "straight-leg jeans")
-- "colors": JSON array of color strings, primary color first (e.g. ["burgundy", "cream"]). Be specific — "cobalt blue" not "blue"
-- "pattern": exactly one of these strings: "solid", "striped", "plaid", "floral", "geometric", "animal print", "logo", "abstract", "other"
-- "material_guess": single string only, the ONE primary inferred material (e.g. "chiffon"). Never output two materials.
-- "style_tags": JSON array of style descriptor strings (e.g. ["casual", "streetwear"])
-- "fit": exactly one of these strings: "slim", "regular", "oversized", "fitted", "flowy", "tailored"
-- "brand_visible": single string with ONE brand name if clearly visible, otherwise JSON null. Never list multiple brands.
-- "description": single string, 1-2 sentences a shopper could use to find this item. Do not use double-quote characters inside this string.
-- "confidence": float between 0.0 and 1.0
+- "person": string describing the person (e.g. "woman in foreground", "man on left")
+- "item_type": garment category. Use Indian-specific terms where appropriate: "saree", "kurta", "kurti", "lehenga", "anarkali", "salwar suit", "sherwani", "dhoti", "dupatta" — not generic Western equivalents like "dress" or "skirt"
+- "item_subtype": more specific type (e.g. "wrap midi dress", "silk saree", "straight-leg jeans")
+- "colors": array of color strings, primary first. Be specific — "cobalt blue" not "blue"
+- "pattern": exactly one of: "solid", "striped", "plaid", "floral", "geometric", "animal print", "logo", "abstract", "other"
+- "material_guess": ONE primary inferred material (e.g. "chiffon", "georgette", "denim"). Never two.
+- "style_tags": array of style descriptors (e.g. ["ethnic", "bridal", "festive"] or ["casual", "streetwear"])
+- "fit": exactly one of: "slim", "regular", "oversized", "fitted", "flowy", "tailored"
+- "brand_visible": ONE brand name if clearly visible, otherwise null
+- "description": 1-2 sentences a shopper could use to find this item. No double-quote characters inside.
+- "confidence": float 0.0-1.0
 
-Important rules:
-- Every field that is a string must be ONE string value — never output two comma-separated values for a single string field
-- Only include items clearly visible for at least 1 second
-- Treat each distinct garment as a separate item (top and bottom = 2 items)
-- Include accessories: bags, shoes, jewelry, hats, belts, sunglasses
-- Skip items that are too blurry, too small, or only partially visible
-- If the same person appears multiple times in different outfits, list each outfit's items separately
-- This is the full video — a person wearing the same outfit across multiple scenes is ONE item, not multiple. Deduplicate aggressively.
-- If you are uncertain whether two appearances are the same item, treat them as one. Err on the side of fewer items, not more.
-- Do not list the same garment twice just because it appears in different shots or scenes.
+Rules:
+- Every string field must be a single string value — never comma-separated values
+- Only include items visible for at least 1 second
+- Each distinct garment is a separate item (top + bottom = 2 items)
+- Include accessories: bags, shoes, jewellery, hats, belts, sunglasses
+- Skip items that are blurry, too small, or only partially visible
+- Same outfit across multiple scenes = ONE item. Deduplicate aggressively.
+- When uncertain if two appearances are the same item, treat them as one
 
-Return ONLY a valid JSON array. No markdown fences, no explanation, no text before or after the array.
+Return ONLY a valid JSON array. No markdown fences, no explanation.
 [
   {
     "item_id": 1,
     "person": "woman in foreground",
-    "item_type": "dress",
-    "item_subtype": "wrap midi dress",
-    "colors": ["forest green", "cream"],
+    "item_type": "saree",
+    "item_subtype": "silk saree",
+    "colors": ["royal blue", "gold"],
     "pattern": "floral",
-    "material_guess": "chiffon",
-    "style_tags": ["feminine", "boho", "spring"],
+    "material_guess": "silk",
+    "style_tags": ["ethnic", "festive"],
     "fit": "flowy",
     "brand_visible": null,
-    "description": "A flowy forest green and cream floral wrap midi dress with a V-neckline and long sleeves.",
+    "description": "A royal blue silk saree with gold floral embroidery and a contrast gold border.",
     "confidence": 0.91
   }
 ]
@@ -66,7 +57,6 @@ Return ONLY a valid JSON array. No markdown fences, no explanation, no text befo
 
 
 def upload_video(client: genai.Client, video_path: str) -> str:
-    """Upload video to Gemini Files API, return file URI."""
     path = pathlib.Path(video_path)
     print(f"Uploading {path.name} ({path.stat().st_size / 1e6:.1f} MB)...")
 
@@ -77,7 +67,6 @@ def upload_video(client: genai.Client, video_path: str) -> str:
         )
 
     file_name = response.name
-    print(f"Upload complete. File: {file_name}")
     print("Waiting for processing", end="", flush=True)
 
     while True:
@@ -93,8 +82,7 @@ def upload_video(client: genai.Client, video_path: str) -> str:
     return file_info.uri
 
 
-def detect_fashion(client: genai.Client, video_uri: str, model: str = "gemini-2.0-flash") -> list[dict]:
-    """Run fashion detection on uploaded video."""
+def detect_fashion(client: genai.Client, video_uri: str, model: str = "gemini-2.5-flash") -> list[dict]:
     print(f"Running detection with {model}...")
 
     response = client.models.generate_content(
@@ -103,45 +91,23 @@ def detect_fashion(client: genai.Client, video_uri: str, model: str = "gemini-2.
             types.Part.from_uri(file_uri=video_uri, mime_type="video/mp4"),
             FASHION_PROMPT,
         ],
-        config={"temperature": 0.2, "max_output_tokens": 8192},
+        config={"temperature": 0.2, "max_output_tokens": 65536},
     )
 
     raw = response.text.strip()
-    # Strip markdown code blocks if present
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
-    raw = raw.strip()
-
-    items = json.loads(raw)
-    return items
-
-
-def format_results(items: list[dict]) -> str:
-    lines = [f"\n{'='*60}", f"  DETECTED {len(items)} FASHION ITEMS", f"{'='*60}"]
-    for item in items:
-        ts = f"{item['timestamp_first_seen']:.1f}s – {item['timestamp_last_seen']:.1f}s"
-        lines.append(f"\n[{item['item_id']}] {item['item_type'].upper()} — {ts}")
-        lines.append(f"  Person:      {item['person']}")
-        lines.append(f"  Subtype:     {item['item_subtype']}")
-        lines.append(f"  Colors:      {', '.join(item['colors'])}")
-        lines.append(f"  Pattern:     {item['pattern']}  |  Fit: {item['fit']}")
-        lines.append(f"  Material:    {item['material_guess']}")
-        lines.append(f"  Style:       {', '.join(item['style_tags'])}")
-        if item.get("brand_visible"):
-            lines.append(f"  Brand:       {item['brand_visible']}")
-        lines.append(f"  Description: {item['description']}")
-        lines.append(f"  Confidence:  {item['confidence']:.0%}")
-    return "\n".join(lines)
+    return json.loads(raw.strip())
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fashion item detector for video files")
-    parser.add_argument("--video", required=True, help="Path to MP4 file")
-    parser.add_argument("--api-key", default=os.getenv("GEMINI_API_KEY", ""), help="Google Gemini API key")
-    parser.add_argument("--model", default="gemini-2.5-flash", help="Gemini model to use")
-    parser.add_argument("--output", help="Optional: save JSON results to this file")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--video", required=True)
+    parser.add_argument("--api-key", default=os.getenv("GEMINI_API_KEY", ""))
+    parser.add_argument("--model", default="gemini-2.5-flash")
+    parser.add_argument("--output")
     args = parser.parse_args()
 
     client = genai.Client(api_key=args.api_key)
@@ -151,16 +117,28 @@ def main():
     items = detect_fashion(client, video_uri, model=args.model)
     elapsed = time.time() - t0
 
-    print(format_results(items))
-    print(f"\nTotal time: {elapsed:.1f}s")
-    print(f"Items detected: {len(items)}")
+    from myntra_search import build_myntra_urls
+    myntra_urls = build_myntra_urls(items)
+
+    print(f"\n{'='*60}\n  {len(items)} ITEMS DETECTED  ({elapsed:.1f}s)\n{'='*60}")
+    for item in items:
+        iid = item["item_id"]
+        print(f"\n[{iid}] {item['item_type'].upper()} — {item['item_subtype']}")
+        print(f"  {item['person']}  |  {', '.join(item['colors'])}  |  {item['confidence']:.0%}")
+        print(f"  {item['description']}")
+        if iid in myntra_urls:
+            print(f"  Myntra → {myntra_urls[iid]['url']}")
 
     if args.output:
+        export = [
+            {**item, **({"myntra_url": myntra_urls[item["item_id"]]["url"],
+                         "search_query": myntra_urls[item["item_id"]]["query"]}
+                        if item["item_id"] in myntra_urls else {})}
+            for item in items
+        ]
         with open(args.output, "w") as f:
-            json.dump(items, f, indent=2)
-        print(f"Results saved to {args.output}")
-
-    return items
+            json.dump(export, f, indent=2)
+        print(f"\nSaved to {args.output}")
 
 
 if __name__ == "__main__":
